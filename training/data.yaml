@@ -1,0 +1,30 @@
+# data.yaml — YOLO dataset configuration for banana ripeness detection
+# Place your dataset in the structure below, or update paths accordingly.
+#
+# data/
+#   yolo/
+#     images/
+#       train/   ← training images
+#       val/     ← validation images
+#       test/    ← test images (optional)
+#     labels/
+#       train/   ← YOLO format .txt label files
+#       val/
+#       test/
+
+path: ../data/yolo        # root dataset directory
+train: images/train
+val:   images/val
+test:  images/test        # optional
+
+# Number of classes
+nc: 6
+
+# Class names (must match label indices 0–5)
+names:
+  0: Fresh Unripe
+  1: Fresh Ripe
+  2: Ripe
+  3: Overripe
+  4: Rotten
+  5: Unripe

@@ -1,0 +1,80 @@
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-display: 'Syne', sans-serif;
+  --font-body: 'DM Sans', sans-serif;
+  --font-mono: 'DM Mono', monospace;
+
+  --bg:         #0e0e0e;
+  --surface:    #161616;
+  --surface-2:  #1f1f1f;
+  --border:     #2a2a2a;
+  --yellow:     #f5d020;
+  --yellow-dim: #c9a800;
+  --green:      #4ade80;
+  --orange:     #fb923c;
+  --red:        #f87171;
+  --text:       #f0ede6;
+  --text-muted: #6b6b6b;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Grain overlay ── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.35;
+}
+
+/* ── Upload drop zone ── */
+.drop-zone {
+  border: 1.5px dashed var(--border);
+  border-radius: 12px;
+  transition: border-color 0.2s, background 0.2s;
+  cursor: pointer;
+}
+.drop-zone:hover,
+.drop-zone.dragging {
+  border-color: var(--yellow);
+  background: rgba(245, 208, 32, 0.04);
+}
+
+/* ── Ripeness badge colors ── */
+.badge-fresh-unripe { background: #166534; color: #bbf7d0; }
+.badge-fresh-ripe   { background: #14532d; color: #86efac; }
+.badge-ripe         { background: #713f12; color: #fef08a; }
+.badge-overripe     { background: #7c2d12; color: #fed7aa; }
+.badge-rotten       { background: #450a0a; color: #fca5a5; }
+.badge-unripe       { background: #1a2e05; color: #d9f99d; }
+
+/* ── Pulse animation for loading ── */
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245, 208, 32, 0); }
+  50%       { box-shadow: 0 0 24px 4px rgba(245, 208, 32, 0.18); }
+}
+.pulse-glow { animation: pulse-glow 1.8s ease-in-out infinite; }
+
+/* ── Fade-in ── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-up { animation: fadeUp 0.45s ease both; }
+.fade-up-delay { animation: fadeUp 0.45s 0.15s ease both; }
