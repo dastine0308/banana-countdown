@@ -31,6 +31,7 @@ from sklearn.metrics import mean_absolute_error, r2_score
 wandb.init(
     project="banana-countdown",
     name="regression-cnn",
+    entity="ENSF-617-group-16",
     config={
         "base_model":   "resnet18",
         "pretrained":   True,
