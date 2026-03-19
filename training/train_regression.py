@@ -1,5 +1,5 @@
 """
-train_regression.py — Stage 2: Fine-tune ResNet-18 for shelf-life regression
+Fine-tune ResNet-18 for shelf-life regression
 Dataset: Kaggle days-death-to-a-banana
 Logs metrics to Weights & Biases.
 
@@ -12,153 +12,258 @@ Expected dataset folder structure:
     val/
       ...
 
-OR a CSV-based dataset — see RegressionDataset below.
 """
 
 import os
-import shutil
 import wandb
 import torch
 import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader
-from torchvision import models, transforms
-from PIL import Image
-import pandas as pd
+import torch.optim as optim
+import platform
+import matplotlib.pyplot as plt
 import numpy as np
+from torchvision import models, transforms
+from torchvision.datasets import ImageFolder
+from torch.utils.data import DataLoader
 from sklearn.metrics import mean_absolute_error, r2_score
 
-# ── W&B setup ─────────────────────────────────────────────────────────────────
-wandb.init(
-    project="banana-countdown",
-    name="regression-cnn",
-    entity="ENSF-617-group-16",
-    config={
-        "base_model":   "resnet18",
-        "pretrained":   True,
-        "epochs":       40,
-        "batch_size":   32,
-        "lr":           1e-4,
-        "weight_decay": 1e-5,
-        "input_size":   224,
-        "loss":         "SmoothL1",
-        "dataset_csv":  "data/regression/labels.csv",  # path, image_path, days columns
+def main():
+    # --- 1. Initialize W&B ---
+    wandb.init(
+        project="banana-countdown",
+        entity="ENSF-617-group-16",
+        config={
+            "learning_rate": 1e-4,
+            "epochs":        200,
+            "batch_size":    32,
+            "architecture":  "ResNet-18",
+            "dataset":       "data/regression",
+            "loss":          "SmoothL1",
+            "weight_decay":  1e-5,
+            "input_size":    224,
+        }
+    )
+    config = wandb.config
+
+    # --- 2. Setup Device & Paths ---
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(device)
+
+    # __file__ ensures paths are correct regardless of where the script is run from
+    REPO_ROOT   = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    TRAIN_DIR   = os.path.join(REPO_ROOT, "data", "regression", "train")
+    VAL_DIR     = os.path.join(REPO_ROOT, "data", "regression", "val")
+    TEST_DIR    = os.path.join(REPO_ROOT, "data", "regression", "test")
+    WEIGHTS_OUT = os.path.join(REPO_ROOT, "backend", "models", "regression_best.pth")
+
+    print(f"REPO_ROOT : {REPO_ROOT}")
+    print(f"TRAIN_DIR : {TRAIN_DIR}")
+    print(f"WEIGHTS   : {WEIGHTS_OUT}")
+
+    # --- 3. Data Augmentation and Transforms ---
+    data_transforms = {
+        "train": transforms.Compose([
+            transforms.Resize((config.input_size, config.input_size)),
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomVerticalFlip(),          
+            transforms.RandomRotation(15),            
+            transforms.ColorJitter(
+                brightness=0.4,   
+                contrast=0.4,     
+                saturation=0.4,   
+                hue=0.1,          
+            ),            
+            transforms.RandomGrayscale(p=0.05),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+            transforms.RandomErasing(p=0.2),
+        ]),
+        "val_test": transforms.Compose([
+            transforms.Resize((config.input_size, config.input_size)),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+        ]),
     }
-)
-cfg = wandb.config
 
-# ── Dataset ───────────────────────────────────────────────────────────────────
-class RegressionDataset(Dataset):
-    """
-    Expects a CSV with columns: image_path, days
-      image_path — relative path to image from project root
-      days       — float, shelf life in days
-    """
-    def __init__(self, csv_path, split="train", transform=None):
-        df = pd.read_csv(csv_path)
-        self.df = df[df["split"] == split].reset_index(drop=True)
-        self.transform = transform
+    # --- 4. Load Datasets ---
+    class RegressionImageFolder(ImageFolder):
+        """ImageFolder wrapper that converts class index → float days_remaining."""
+        def __getitem__(self, idx):
+            image, class_idx = super().__getitem__(idx)
+            # folder name is the label e.g. "3" → 3.0
+            days = torch.tensor(float(self.classes[class_idx]), dtype=torch.float32)
+            return image, days
 
-    def __len__(self):
-        return len(self.df)
+    train_dataset = RegressionImageFolder(TRAIN_DIR, data_transforms["train"])
+    val_dataset   = RegressionImageFolder(VAL_DIR,   data_transforms["val_test"])
+    test_dataset  = RegressionImageFolder(TEST_DIR,  data_transforms["val_test"])
 
-    def __getitem__(self, idx):
-        row = self.df.iloc[idx]
-        image = Image.open(row["image_path"]).convert("RGB")
-        if self.transform:
-            image = self.transform(image)
-        label = torch.tensor(float(row["days"]), dtype=torch.float32)
-        return image, label
+    # Data Loaders
+    is_mac     = platform.system() == "Darwin"
+    is_windows = platform.system() == "Windows"
 
+    num_workers = 0 if (is_mac or is_windows) else 4
+    pin_memory  = False if (is_mac or is_windows) else True
 
-train_tf = transforms.Compose([
-    transforms.Resize((cfg.input_size, cfg.input_size)),
-    transforms.RandomHorizontalFlip(),
-    transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
-    transforms.ToTensor(),
-    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-])
+    train_loader = DataLoader(train_dataset, batch_size=config.batch_size, shuffle=True,  num_workers=num_workers, pin_memory=pin_memory)
+    val_loader   = DataLoader(val_dataset,   batch_size=config.batch_size, shuffle=False, num_workers=num_workers, pin_memory=pin_memory)
+    test_loader  = DataLoader(test_dataset,  batch_size=config.batch_size, shuffle=False, num_workers=num_workers, pin_memory=pin_memory)
 
-val_tf = transforms.Compose([
-    transforms.Resize((cfg.input_size, cfg.input_size)),
-    transforms.ToTensor(),
-    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-])
+    # --- 5. Initialize ResNet-18 ---
+    model = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
 
-train_ds = RegressionDataset(cfg.dataset_csv, split="train", transform=train_tf)
-val_ds   = RegressionDataset(cfg.dataset_csv, split="val",   transform=val_tf)
+    # Freeze base layers
+    for name, param in model.named_parameters():
+        if "layer4" in name or "fc" in name:
+            param.requires_grad = True
+        else:
+            param.requires_grad = False
 
-train_loader = DataLoader(train_ds, batch_size=cfg.batch_size, shuffle=True,  num_workers=2)
-val_loader   = DataLoader(val_ds,   batch_size=cfg.batch_size, shuffle=False, num_workers=2)
+    # Replace classifier head with single regression output
+    model.fc = nn.Linear(model.fc.in_features, 1)
+    model = model.to(device)
 
-# ── Model — ResNet-18 with regression head (transfer learning) ────────────────
-device = "cuda" if torch.cuda.is_available() else "cpu"
+    # --- 6. Loss, Optimizer ---
+    criterion = nn.SmoothL1Loss()
+    optimizer = optim.Adam(
+        filter(lambda p: p.requires_grad, model.parameters()),
+        lr=config.learning_rate,
+        weight_decay=config.weight_decay
+    )
 
-model = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1 if cfg.pretrained else None)
-model.fc = nn.Linear(model.fc.in_features, 1)   # single output neuron
-model = model.to(device)
+    wandb.watch(model, log="all")
+    best_val_mae = float("inf")
+    patience = 25
+    no_improve = 0
 
-# ── Loss & optimizer ──────────────────────────────────────────────────────────
-criterion = nn.SmoothL1Loss()
-optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
-scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cfg.epochs)
+    # --- 7. Training & Validation Loop ---
+    for epoch in range(config.epochs):
+        # Training Phase
+        model.train()
+        train_loss = 0.0
+        for inputs, labels in train_loader:
+            inputs, labels = inputs.to(device), labels.to(device)
+            optimizer.zero_grad()
+            outputs = model(inputs).squeeze(1)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
+            train_loss += loss.item()
 
-# ── Training loop ─────────────────────────────────────────────────────────────
-best_val_mae = float("inf")
+        avg_train_loss = train_loss / len(train_loader)
 
-for epoch in range(cfg.epochs):
-    # Train
-    model.train()
-    train_losses = []
-    for images, labels in train_loader:
-        images, labels = images.to(device), labels.to(device)
-        optimizer.zero_grad()
-        preds = model(images).squeeze(1)
-        loss = criterion(preds, labels)
-        loss.backward()
-        optimizer.step()
-        train_losses.append(loss.item())
+        # Validation Phase
+        model.eval()
+        val_loss = 0.0
+        all_preds, all_labels = [], []
+        with torch.no_grad():
+            for inputs, labels in val_loader:
+                inputs, labels = inputs.to(device), labels.to(device)
+                outputs = model(inputs).squeeze(1)
+                loss = criterion(outputs, labels)
+                val_loss += loss.item()
+                all_preds.extend(outputs.cpu().numpy())
+                all_labels.extend(labels.cpu().numpy())
 
-    scheduler.step()
+        avg_val_loss = val_loss / len(val_loader)
+        mae  = mean_absolute_error(all_labels, all_preds)
+        rmse = np.sqrt(np.mean((np.array(all_labels) - np.array(all_preds)) ** 2))
+        r2   = r2_score(all_labels, all_preds)
 
-    # Validate
+        # Log metrics
+        wandb.log({
+            "epoch":      epoch + 1,
+            "train_loss": avg_train_loss,
+            "val_loss":   avg_val_loss,
+            "val_MAE":    mae,
+            "val_RMSE":   rmse,
+            "val_R2":     r2,
+        })
+
+        print(f"Epoch {epoch+1}/{config.epochs} | Train Loss: {avg_train_loss:.4f} | Val MAE: {mae:.3f} | R²: {r2:.3f}")
+
+        # Save Best Model
+        if mae < best_val_mae:
+            best_val_mae = mae
+            os.makedirs(os.path.dirname(WEIGHTS_OUT), exist_ok=True)
+            torch.save(model.state_dict(), WEIGHTS_OUT)
+            print(f"--> Best model saved → {WEIGHTS_OUT}")
+            no_improve = 0
+        else:
+            no_improve += 1
+            if no_improve >= patience:
+                print(f"Early stopping at epoch {epoch + 1}")
+                wandb.log({"early_stopping_epoch": epoch + 1})
+                break
+            
+    # --- 8. Final Test Phase ---
+    print("\n--- Final Evaluation on Test Set ---")
+    model.load_state_dict(torch.load(WEIGHTS_OUT, weights_only=True))
     model.eval()
+
+    test_loss = 0.0
     all_preds, all_labels = [], []
-    val_losses = []
+
     with torch.no_grad():
-        for images, labels in val_loader:
-            images, labels = images.to(device), labels.to(device)
-            preds = model(images).squeeze(1)
-            loss = criterion(preds, labels)
-            val_losses.append(loss.item())
-            all_preds.extend(preds.cpu().numpy())
+        for inputs, labels in test_loader:
+            inputs, labels = inputs.to(device), labels.to(device)
+            outputs = model(inputs).squeeze(1)
+            loss = criterion(outputs, labels)
+            test_loss += loss.item()
+            all_preds.extend(outputs.cpu().numpy())
             all_labels.extend(labels.cpu().numpy())
 
-    mae  = mean_absolute_error(all_labels, all_preds)
-    rmse = np.sqrt(np.mean((np.array(all_labels) - np.array(all_preds)) ** 2))
-    r2   = r2_score(all_labels, all_preds)
+    avg_test_loss = test_loss / len(test_loader)
+    test_mae  = mean_absolute_error(all_labels, all_preds)
+    test_rmse = np.sqrt(np.mean((np.array(all_labels) - np.array(all_preds)) ** 2))
+    test_r2   = r2_score(all_labels, all_preds)
 
     wandb.log({
-        "epoch":       epoch + 1,
-        "train/loss":  np.mean(train_losses),
-        "val/loss":    np.mean(val_losses),
-        "val/MAE":     mae,
-        "val/RMSE":    rmse,
-        "val/R2":      r2,
-        "lr":          scheduler.get_last_lr()[0],
+        "test_loss": avg_test_loss,
+        "test_MAE":  test_mae,
+        "test_RMSE": test_rmse,
+        "test_R2":   test_r2,
     })
 
-    print(f"Epoch {epoch+1:3d}/{cfg.epochs} | train_loss={np.mean(train_losses):.4f} "
-          f"| val_MAE={mae:.3f} | val_RMSE={rmse:.3f} | R²={r2:.3f}")
+    print(f"Test MAE: {test_mae:.3f} | Test RMSE: {test_rmse:.3f} | Test R²: {test_r2:.3f}")
 
-    # Save best checkpoint
-    if mae < best_val_mae:
-        best_val_mae = mae
-        torch.save(model.state_dict(), "regression_best.pth")
-        print(f"  ✓ Saved best model (MAE={mae:.3f})")
+    # --- Scatter plot: Predicted vs True ---
+    fig1, ax1 = plt.subplots(figsize=(6, 6))
+    ax1.scatter(all_labels, all_preds, alpha=0.5, color="steelblue")
+    # perfect prediction line
+    min_val = min(min(all_labels), min(all_preds))
+    max_val = max(max(all_labels), max(all_preds))
+    ax1.plot([min_val, max_val], [min_val, max_val], "r--", label="Perfect prediction")
+    ax1.set_xlabel("True days remaining")
+    ax1.set_ylabel("Predicted days remaining")
+    ax1.set_title(f"Predicted vs True  (MAE={test_mae:.3f}, R²={test_r2:.3f})")
+    ax1.legend()
+    wandb.log({"test/predicted_vs_true": wandb.Image(fig1)})
+    plt.close(fig1)
 
-# ── Copy to backend/models ────────────────────────────────────────────────────
-os.makedirs("../backend/models", exist_ok=True)
-shutil.copy("regression_best.pth", "../backend/models/regression_best.pth")
-print("Saved regression weights → ../backend/models/regression_best.pth")
+    # --- Residual plot: Error distribution ---
+    residuals = np.array(all_preds) - np.array(all_labels)
+    fig2, ax2 = plt.subplots(figsize=(6, 4))
+    ax2.hist(residuals, bins=20, color="salmon", edgecolor="white")
+    ax2.axvline(0, color="black", linestyle="--", label="Zero error")
+    ax2.set_xlabel("Prediction error (pred - true)")
+    ax2.set_ylabel("Count")
+    ax2.set_title("Residual distribution")
+    ax2.legend()
+    wandb.log({"test/residual_distribution": wandb.Image(fig2)})
+    plt.close(fig2)
 
-wandb.finish()
+    # --- 9. Upload weights to W&B Artifacts ---
+    artifact = wandb.Artifact(
+        name="regression-best",
+        type="model",
+        description=f"ResNet-18 regression model — best val MAE: {best_val_mae:.3f}"
+    )
+    artifact.add_file(WEIGHTS_OUT)
+    wandb.log_artifact(artifact)
+    print("Uploaded → W&B Artifacts: regression-best")
+
+    wandb.finish()
+
+if __name__ == "__main__":
+    main()
