@@ -23,7 +23,7 @@ wandb/
 
 # Data
 data/
-*.csv
+*.zip
 
 # Node / Next.js
 node_modules/
