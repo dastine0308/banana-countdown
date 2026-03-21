@@ -39,6 +39,12 @@ Upload a photo → get a bounding box, ripeness label, confidence score, and she
 
 ---
 
+## Model Registry (W&B Artifacts)
+If you do not wish to retrain the models locally, you can download the latest production weights from the **Artifacts** tab on our [W&B Project Page](https://wandb.ai/ENSF-617-group-16/banana-countdown).
+
+* **YOLO:** `yolo-best:latest` → Save as `backend/models/bestmodel.pt`
+* **CNN:** `regression-best:latest` → Save as `backend/models/regression_best.pth`
+
 ## Repo Structure
 
 ```
@@ -70,6 +76,7 @@ banana-countdown/
 │   ├── components/
 │   └── public/images/              # Pixel banana assets
 ├── training/
+│   ├── download_yolo_data.py       # Fetches YOLO dataset via Roboflow API
 │   ├── prepare_regression_data.py  # Step 1: parse & split Kaggle dataset
 │   ├── train_yolo.py               # Step 2a: YOLO fine-tuning
 │   ├── train_regression.py         # Step 2b: Regression CNN training
@@ -93,6 +100,7 @@ cp .env.example .env
 KAGGLE_USERNAME=your_kaggle_username
 KAGGLE_KEY=your_kaggle_api_key
 WANDB_API_KEY=your_wandb_api_key
+ROBOFLOW_API_KEY=your_roboflow_api_key
 ```
 
 ---
@@ -106,11 +114,14 @@ cd banana-countdown
 pip install -r requirements.txt
 ```
 
-### 2. Download Kaggle dataset
-```bash
-# Load env variables
-export $(cat .env | xargs)
+### 2a. Download YOLO Dataset
+```
+# Downloads the Roboflow dataset with bounding boxes into data/yolo/
+python training/download_yolo_data.py
+```
 
+### 2b. Download Kaggle dataset
+```
 # Download and unzip
 kaggle datasets download -d anishkumar00/days-death-to-a-banana
 unzip days-death-to-a-banana.zip -d data/regression_raw
@@ -129,9 +140,14 @@ and copies images into `data/regression/train|val|test/<days>/` using an 80/10/1
 # Stage 1 — YOLO (run from repo root)
 python training/train_yolo.py
 
+### Windows GPU Note
+If training is extremely slow (1hr+ per epoch), ensure you have the CUDA version of PyTorch installed:
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+
 # Stage 2 — Regression CNN (run from repo root)
 python training/train_regression.py
 ```
+All training scripts should be run from the **root directory** to ensure paths in `data.yaml` resolve correctly.<br>
 Both scripts log to W&B under team `ENSF-617-group-16`, project `banana-countdown`.
 Trained weights are automatically copied to `backend/models/`.
 
