@@ -67,6 +67,11 @@ def main():
     else:
         print(f"Warning: {best_path} not found. Check training logs.")
 
+    # Upload the model to your team's W&B cloud
+    artifact = wandb.Artifact("yolo-banana-model", type="model")
+    artifact.add_file(backend_model_path)
+    wandb.log_artifact(artifact)
+
     wandb.finish()
 
 if __name__ == '__main__':
