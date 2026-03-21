@@ -4,3 +4,6 @@ torchvision
 scikit-learn
 wandb
 matplotlib
+kaggle
+ultralytics
+roboflow
