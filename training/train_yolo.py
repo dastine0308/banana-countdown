@@ -38,7 +38,7 @@ def main():
         batch=cfg.batch,
         lr0=cfg.lr0,
         optimizer=cfg.optimizer,
-        project="runs/detect",
+        project="runs/detect_custom",
         name="banana_yolo",
         exist_ok=True,
         device=0 if torch.cuda.is_available() else "cpu",
@@ -55,7 +55,7 @@ def main():
 
     # ── Save best weights ─────────────────────────────────────────────────────────
     # Using Path() makes this work perfectly on Windows (E:\...) and Linux
-    best_path = Path("runs/detect/banana_yolo/weights/best.pt")
+    best_path = Path("runs/detect_custom/banana_yolo/weights/best.pt")
     backend_model_path = Path("backend/models/bestmodel.pt")
 
     # Create directory if it doesn't exist
