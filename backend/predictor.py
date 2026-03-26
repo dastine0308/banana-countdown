@@ -98,7 +98,8 @@ class BananaPredictor:
             cv2.putText(annotated, tag, (x1 + 2, y1 - 4),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1)
 
-        _, buf = cv2.imencode(".png", annotated)
+        encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 75]
+        _, buf = cv2.imencode(".jpg", annotated, encode_param)
         return base64.b64encode(buf).decode("utf-8")
 
     def run(self, image_bgr: np.ndarray) -> dict:
