@@ -38,7 +38,7 @@ export default function Home() {
       const formData = new FormData();
       formData.append("image", file);
 
-      const res = await fetch("/api/predict", {
+      const res = await fetch("http://localhost:8000/predict", {
         method: "POST",
         body: formData,
       });
