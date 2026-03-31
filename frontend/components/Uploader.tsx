@@ -36,7 +36,7 @@ export default function Uploader({ onFile, loading, preview }: UploaderProps) {
             fontWeight: 800,
             fontSize: "clamp(2rem, 6vw, 3.2rem)",
             letterSpacing: "-0.04em",
-            lineHeight: 1.05,
+            lineHeight: 1.2,
             color: "var(--text)",
           }}
         >
