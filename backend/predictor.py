@@ -5,6 +5,7 @@ predictor.py — Sequential multi-model pipeline
 """
 
 import base64
+import os
 import cv2
 import numpy as np
 import torch
@@ -14,10 +15,10 @@ from ultralytics import YOLO
 
 # ── Class metadata ────────────────────────────────────────────────────────────
 CLASS_NAMES = {
-    0: "Fresh Unripe",
-    1: "Fresh Ripe",
-    2: "Ripe",
-    3: "Overripe",
+    0: "Fresh Ripe",
+    1: "Fresh Unripe",
+    2: "Overripe",
+    3: "Ripe",
     4: "Rotten",
     5: "Unripe",
 }
@@ -62,6 +63,11 @@ class BananaPredictor:
 
         # Stage 2 — Regression CNN
         self.regressor = build_regression_model(regression_path).to(self.device)
+
+        # YOLO inference thresholds (tunable via env vars)
+        self.yolo_conf = float(os.getenv("YOLO_CONF", "0.5"))
+        self.yolo_iou = float(os.getenv("YOLO_IOU", "0.5"))
+        self.yolo_max_det = int(os.getenv("YOLO_MAX_DET", "10"))
 
     def _predict_days(self, image_bgr: np.ndarray, box) -> float:
         """Crop banana region, run regression CNN, return days remaining."""
@@ -108,13 +114,21 @@ class BananaPredictor:
         Returns a dict with detections list + annotated_image base64.
         """
         # ── Stage 1: YOLO ─────────────────────────────────────────────────────
-        yolo_results = self.yolo(image_bgr, verbose=False)[0]
+        yolo_results = self.yolo.predict(
+            source=image_bgr,
+            conf=self.yolo_conf,
+            iou=self.yolo_iou,
+            max_det=self.yolo_max_det,
+            verbose=False,
+        )[0]
 
         detections = []
         for box in yolo_results.boxes:
             coords     = box.xyxy[0].tolist()          # [x1, y1, x2, y2]
             class_id   = int(box.cls[0].item())
             confidence = round(float(box.conf[0].item()), 4)
+            if confidence < self.yolo_conf:
+                continue
             label      = CLASS_NAMES.get(class_id, "Unknown")
 
             # ── Stage 2: Regression CNN ────────────────────────────────────────
