@@ -71,6 +71,9 @@ class BananaPredictor:
         x1, y1 = max(0, x1), max(0, y1)
         x2, y2 = min(w, x2), min(h, y2)
 
+        if x1 == x2 or y1 == y2:
+            return 0.0  # Invalid box, treat as 0 days remaining
+
         crop = image_bgr[y1:y2, x1:x2]
         crop_rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
 

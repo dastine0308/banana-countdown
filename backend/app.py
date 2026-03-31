@@ -1,5 +1,6 @@
 import os
 import base64
+import threading
 import numpy as np
 import cv2
 from flask import Flask, request, jsonify
@@ -8,6 +9,9 @@ from predictor import BananaPredictor
 
 app = Flask(__name__)
 CORS(app)
+
+# Global lock to ensure thread safety during prediction
+prediction_lock = threading.Lock()
 
 # Load both models once at startup
 predictor = BananaPredictor(
@@ -46,8 +50,9 @@ def predict():
     if image is None:
         return jsonify({"error": "Could not decode image"}), 400
 
-    # Run sequential pipeline
-    results = predictor.run(image)
+    with prediction_lock:
+        # Run sequential pipeline
+        results = predictor.run(image)
 
     if not results:
         return jsonify({"error": "No banana detected in image"}), 200
@@ -56,4 +61,4 @@ def predict():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)
