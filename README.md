@@ -195,7 +195,7 @@ npm run dev
 
 | Dataset | Purpose | Labels | Location |
 |---|---|---|---|
-| [Banana Ripeness (Roboflow)](https://universe.roboflow.com) | YOLO training | Bounding boxes + 6 class labels | `data/yolo/` |
+| [Banana Ripeness (Roboflow)](https://universe.roboflow.com/fruit-ripening/banana-ripening-process) | YOLO training | Bounding boxes + 6 class labels | `data/yolo/` |
 | [Days to Death (Kaggle)](https://www.kaggle.com/datasets/anishkumar00/days-death-to-a-banana) | Regression CNN | `days_remaining` (numeric) | `data/regression_raw/` → `data/regression/` |
 
 > Both `data/` folders are git-ignored. Use the quickstart steps above to download locally.

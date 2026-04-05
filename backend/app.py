@@ -5,6 +5,10 @@ import cv2
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from predictor import BananaPredictor
+from dotenv import load_dotenv
+
+# Load environment variables from `backend/.env` if present.
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)

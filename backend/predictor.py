@@ -68,6 +68,19 @@ class BananaPredictor:
         self.yolo_conf = float(os.getenv("YOLO_CONF", "0.5"))
         self.yolo_iou = float(os.getenv("YOLO_IOU", "0.5"))
         self.yolo_max_det = int(os.getenv("YOLO_MAX_DET", "10"))
+        self.yolo_imgsz = int(os.getenv("YOLO_IMGSZ", "640"))
+
+        agnostic = os.getenv("YOLO_AGNOSTIC_NMS", "false").strip().lower()
+        self.yolo_agnostic_nms = agnostic in {"1", "true", "yes", "y", "on"}
+
+        augment = os.getenv("YOLO_AUGMENT", "false").strip().lower()
+        self.yolo_augment = augment in {"1", "true", "yes", "y", "on"}
+
+        classes_raw = os.getenv("YOLO_CLASSES", "").strip()
+        if classes_raw:
+            self.yolo_classes = [int(x) for x in classes_raw.split(",") if x.strip() != ""]
+        else:
+            self.yolo_classes = None
 
     def _predict_days(self, image_bgr: np.ndarray, box) -> float:
         """Crop banana region, run regression CNN, return days remaining."""
@@ -119,6 +132,10 @@ class BananaPredictor:
             conf=self.yolo_conf,
             iou=self.yolo_iou,
             max_det=self.yolo_max_det,
+            imgsz=self.yolo_imgsz,
+            agnostic_nms=self.yolo_agnostic_nms,
+            augment=self.yolo_augment,
+            classes=self.yolo_classes,
             verbose=False,
         )[0]
 
