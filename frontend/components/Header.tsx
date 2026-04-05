@@ -26,7 +26,7 @@ export default function Header() {
         </span>
       </div>
 
-      <div
+      {/* <div
         style={{
           fontFamily: "var(--font-mono)",
           fontSize: "0.7rem",
@@ -35,7 +35,7 @@ export default function Header() {
         }}
       >
         ENSF617 · Computer Vision
-      </div>
+      </div> */}
     </header>
   );
 }

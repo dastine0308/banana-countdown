@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, DragEvent, ChangeEvent } from "react";
+import WebcamCapture from "@/components/WebcamCapture";
 
 interface UploaderProps {
   onFile: (file: File) => void;
@@ -11,8 +12,9 @@ interface UploaderProps {
 const ACCEPTED = ["image/jpeg", "image/png", "image/webp"];
 
 export default function Uploader({ onFile, loading, preview }: UploaderProps) {
-  const inputRef  = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
+  const [webcamOpen, setWebcamOpen] = useState(false);
 
   const handleDrop = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -53,7 +55,7 @@ export default function Uploader({ onFile, loading, preview }: UploaderProps) {
             fontWeight: 300,
           }}
         >
-          Upload a photo — AI detects ripeness stage &amp; estimates shelf life.
+          Upload a photo or use your camera — AI detects ripeness &amp; estimates shelf life.
         </p>
       </div>
 
@@ -101,15 +103,41 @@ export default function Uploader({ onFile, loading, preview }: UploaderProps) {
               className="rounded-lg w-full object-contain"
               style={{ maxHeight: "320px" }}
             />
-            <span
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: "0.65rem",
-                color: "var(--text-muted)",
-              }}
-            >
-              click to change image
-            </span>
+            <div className="flex flex-col items-center gap-2 w-full">
+              <span
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "0.65rem",
+                  color: "var(--text-muted)",
+                }}
+              >
+                tap image to pick a file, or use camera
+              </span>
+              <div className="flex flex-wrap justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!loading) setWebcamOpen(true);
+                  }}
+                  style={{
+                    fontFamily: "var(--font-display)",
+                    fontWeight: 700,
+                    fontSize: "0.75rem",
+                    letterSpacing: "0.06em",
+                    background: "transparent",
+                    color: "var(--yellow)",
+                    border: "1px solid var(--yellow)",
+                    borderRadius: "6px",
+                    padding: "6px 14px",
+                    cursor: loading ? "not-allowed" : "pointer",
+                    opacity: loading ? 0.5 : 1,
+                  }}
+                >
+                  USE CAMERA
+                </button>
+              </div>
+            </div>
           </div>
         ) : (
           <>
@@ -141,27 +169,60 @@ export default function Uploader({ onFile, loading, preview }: UploaderProps) {
                 JPG · PNG · WEBP
               </p>
             </div>
-            <button
-              type="button"
-              style={{
-                fontFamily: "var(--font-display)",
-                fontWeight: 700,
-                fontSize: "0.8rem",
-                letterSpacing: "0.06em",
-                background: "var(--yellow)",
-                color: "#0e0e0e",
-                border: "none",
-                borderRadius: "6px",
-                padding: "8px 20px",
-                cursor: "pointer",
-                marginTop: "4px",
-              }}
+            <div
+              className="flex flex-wrap justify-center gap-2"
+              style={{ marginTop: "4px" }}
+              onClick={(e) => e.stopPropagation()}
             >
-              BROWSE FILE
-            </button>
+              <button
+                type="button"
+                onClick={() => !loading && inputRef.current?.click()}
+                style={{
+                  fontFamily: "var(--font-display)",
+                  fontWeight: 700,
+                  fontSize: "0.8rem",
+                  letterSpacing: "0.06em",
+                  background: "var(--yellow)",
+                  color: "#0e0e0e",
+                  border: "none",
+                  borderRadius: "6px",
+                  padding: "8px 20px",
+                  cursor: loading ? "not-allowed" : "pointer",
+                  opacity: loading ? 0.6 : 1,
+                }}
+              >
+                BROWSE FILE
+              </button>
+              <button
+                type="button"
+                onClick={() => !loading && setWebcamOpen(true)}
+                style={{
+                  fontFamily: "var(--font-display)",
+                  fontWeight: 700,
+                  fontSize: "0.8rem",
+                  letterSpacing: "0.06em",
+                  background: "transparent",
+                  color: "var(--yellow)",
+                  border: "1px solid var(--yellow)",
+                  borderRadius: "6px",
+                  padding: "8px 20px",
+                  cursor: loading ? "not-allowed" : "pointer",
+                  opacity: loading ? 0.6 : 1,
+                }}
+              >
+                USE CAMERA
+              </button>
+            </div>
           </>
         )}
       </div>
+
+      <WebcamCapture
+        isOpen={webcamOpen}
+        onClose={() => setWebcamOpen(false)}
+        onCapture={onFile}
+        disabled={loading}
+      />
     </div>
   );
 }
