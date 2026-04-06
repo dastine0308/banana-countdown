@@ -12,6 +12,8 @@ Banana Countdown is an end-to-end Computer Vision web app that:
 
 Upload a photo → get a bounding box, ripeness label, confidence score, and shelf-life countdown.
 
+**Live site:** [https://banana-countdown.vercel.app/](https://banana-countdown.vercel.app/)
+
 ---
 
 ## Ripeness Classes (6)
