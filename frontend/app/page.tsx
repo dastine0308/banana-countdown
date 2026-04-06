@@ -17,6 +17,10 @@ export type PredictResponse = {
   annotated_image: string; // base64 PNG
 };
 
+const API_BASE = (
+  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
+).replace(/\/$/, "");
+
 export default function Home() {
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState<string | null>(null);
@@ -38,7 +42,7 @@ export default function Home() {
       const formData = new FormData();
       formData.append("image", file);
 
-      const res = await fetch("http://localhost:8000/predict", {
+      const res = await fetch(`${API_BASE}/predict`, {
         method: "POST",
         body: formData,
       });
