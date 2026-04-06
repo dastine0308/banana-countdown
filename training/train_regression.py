@@ -27,6 +27,25 @@ from torchvision.datasets import ImageFolder
 from torch.utils.data import DataLoader
 from sklearn.metrics import mean_absolute_error, r2_score
 
+
+def per_class_mae(y_true, y_pred):
+    """Calculate per-class MAE."""
+    y_true = np.asarray(y_true, dtype=np.float64).ravel()
+    y_pred = np.asarray(y_pred, dtype=np.float64).ravel()
+    out = {}
+    for c in np.unique(y_true):
+        mask = y_true == c
+        if not np.any(mask):
+            continue
+        out[int(c)] = float(np.mean(np.abs(y_pred[mask] - y_true[mask])))
+    return out
+
+
+def per_class_counts(y_true):
+    y_true = np.asarray(y_true, dtype=np.float64).ravel()
+    return {int(c): int(np.sum(y_true == c)) for c in np.unique(y_true)}
+
+
 def main():
     # --- 1. Initialize W&B ---
     wandb.init(
@@ -41,6 +60,7 @@ def main():
             "loss":          "SmoothL1",
             "weight_decay":  1e-5,
             "input_size":    224,
+            "trainable_backbone": "layer3+layer4+fc",
         }
     )
     config = wandb.config
@@ -112,9 +132,9 @@ def main():
     # --- 5. Initialize ResNet-18 ---
     model = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
 
-    # Freeze base layers
+    # Freeze stem + layer1–2; train layer3–4 + fc (finer features for adjacent-day confusion, e.g. day 6/7/8)
     for name, param in model.named_parameters():
-        if "layer4" in name or "fc" in name:
+        if "layer3" in name or "layer4" in name or "fc" in name:
             param.requires_grad = True
         else:
             param.requires_grad = False
@@ -169,18 +189,26 @@ def main():
         mae  = mean_absolute_error(all_labels, all_preds)
         rmse = np.sqrt(np.mean((np.array(all_labels) - np.array(all_preds)) ** 2))
         r2   = r2_score(all_labels, all_preds)
+        val_pcm = per_class_mae(all_labels, all_preds)
 
         # Log metrics
-        wandb.log({
+        log_dict = {
             "epoch":      epoch + 1,
             "train_loss": avg_train_loss,
             "val_loss":   avg_val_loss,
             "val_MAE":    mae,
             "val_RMSE":   rmse,
             "val_R2":     r2,
-        })
+        }
+        for day, m in val_pcm.items():
+            log_dict[f"val_MAE_per_class/{day}"] = m
+        wandb.log(log_dict)
 
-        print(f"Epoch {epoch+1}/{config.epochs} | Train Loss: {avg_train_loss:.4f} | Val MAE: {mae:.3f} | R²: {r2:.3f}")
+        pcm_str = " ".join(f"d{k}:{v:.2f}" for k, v in sorted(val_pcm.items()))
+        print(
+            f"Epoch {epoch+1}/{config.epochs} | Train Loss: {avg_train_loss:.4f} | "
+            f"Val MAE: {mae:.3f} | R²: {r2:.3f} | per-class: {pcm_str}"
+        )
 
         # Save Best Model
         if mae < best_val_mae:
@@ -218,14 +246,24 @@ def main():
     test_rmse = np.sqrt(np.mean((np.array(all_labels) - np.array(all_preds)) ** 2))
     test_r2   = r2_score(all_labels, all_preds)
 
-    wandb.log({
+    test_pcm = per_class_mae(all_labels, all_preds)
+    test_counts = per_class_counts(all_labels)
+
+    test_log = {
         "test_loss": avg_test_loss,
         "test_MAE":  test_mae,
         "test_RMSE": test_rmse,
         "test_R2":   test_r2,
-    })
+    }
+    for day, m in test_pcm.items():
+        test_log[f"test_MAE_per_class/{day}"] = m
+    wandb.log(test_log)
 
     print(f"Test MAE: {test_mae:.3f} | Test RMSE: {test_rmse:.3f} | Test R²: {test_r2:.3f}")
+    print("Test per-class MAE (true day → MAE, n):")
+    for day in sorted(test_pcm.keys()):
+        n = test_counts.get(day, 0)
+        print(f"  day {day}: MAE={test_pcm[day]:.3f}  (n={n})")
 
     # --- Scatter plot: Predicted vs True ---
     fig1, ax1 = plt.subplots(figsize=(6, 6))
