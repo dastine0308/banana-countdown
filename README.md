@@ -97,6 +97,8 @@ banana-countdown/
 
 ## Environment Setup
 
+Ensuring your environment is setup correctly is an important step to running the application locally.
+
 ```bash
 cp .env.example .env
 # Fill in your credentials in .env
@@ -164,6 +166,15 @@ python training/train_regression.py
 
 Both scripts log metrics to W&B under team `ENSF-617-group-16`, project `banana-countdown`.
 Trained weights are automatically copied to `backend/models/`.
+
+### 4b. Alternatively, use the pretrained models
+```bash
+wandb artifact get ENSF-617-group-16/banana-countdown/regression-best:latest \
+  --root backend/models/
+
+wandb artifact get ENSF-617-group-16/banana-countdown/yolo-best:latest --root backend/models
+ls -R backend/models
+```
 
 ### 5. Run the backend
 ```bash
